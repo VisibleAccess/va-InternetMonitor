@@ -14,6 +14,7 @@ LTE_IFACE=${LTE_INTERFACE_NAME}
 # Initialize
 THRESHOLD=$MAX_THRESHOLD_COUNT
 INITIAL_FAIL_TIME=0
+PACKET_LOSS=100 #Default global
 
 # Enable sysrq for reboot
 echo 1 > /proc/sys/kernel/sysrq
@@ -24,21 +25,19 @@ echo "$(date '+%Y-%m-%d %H:%M:%S') - Interfaces: Ethernet=$ETHERNET_IFACE, LTE=$
 # Function to get packet loss
 get_packet_loss() {
     iface=$1
-    loss=100  # Default
 
-    [ -z "$iface" ] && echo "$loss" && return
-
+    if [ -z "$iface" ]; then
+	return
+    fi
     result=$(ping -I "$iface" -c 1 -W 5 8.8.8.8 2>/dev/null)
 
     loss_line=$(echo "$result" | grep -oE '[0-9]+% packet loss')
     if [ -n "$loss_line" ]; then
         loss_value=$(echo "$loss_line" | awk '{print $1}' | tr -d '%')
         if echo "$loss_value" | grep -qE '^[0-9]+$' && [ "$loss_value" -le 100 ]; then
-            loss=$loss_value
+            PACKET_LOSS=$loss_value
         fi
     fi
-
-    echo "$loss"
 }
 
 while true; do
@@ -49,8 +48,8 @@ while true; do
     for iface in "$ETHERNET_IFACE" "$LTE_IFACE"; do
         [ -z "$iface" ] && continue
 
-        loss=$(get_packet_loss "$iface")
-        loss=${loss:-100}  # Default to 100% if empty
+        get_packet_loss "$iface"
+        loss=$PACKET_LOSS
 
         echo "$(date '+%Y-%m-%d %H:%M:%S') - $iface Loss: ${loss}%"
 
@@ -96,6 +95,7 @@ while true; do
     elif [ "$INITIAL_FAIL_TIME" -ne 0 ] && [ $((current_time - INITIAL_FAIL_TIME)) -ge "$TIME_LIMIT" ]; then
             echo "$(date '+%Y-%m-%d %H:%M:%S') - Internet down too long while THRESHOLD > 0. Rebooting..."
             echo b > /proc/sysrq-trigger
+    
     elif [ "$INITIAL_FAIL_TIME" -ne 0 ]; then
 	    failure_duration=$((current_time - INITIAL_FAIL_TIME))
 	    echo "$(date '+%Y-%m-%d %H:%M:%S') - Internet down on both Interfaces. Failure duration: ${failure_duration} seconds ($((failure_duration / 60)) min)."
