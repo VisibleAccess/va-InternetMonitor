@@ -85,23 +85,20 @@ while true; do
     current_time=$(date +%s)
 
     if [ "$THRESHOLD" -eq 0 ]; then
-	if [ "$FAILURE_START" -eq 1 ]; then
-	    echo "$(date '+%Y-%m-%d %H:%M:%S') - THRESHOLD is 0. Triggering immediate reboot."
+        if [ "$FAILURE_START" -eq 1 ]; then
+            echo "$(date '+%Y-%m-%d %H:%M:%S') - THRESHOLD is 0 and FAILURE_START=1. Rebooting now..."
             echo b > /proc/sysrq-trigger
-    	else
-	    FAILURE_START=1
-	    echo "$(date '+%Y-%m-%d %H:%M:%S') - THRESHOLD is 0. Setting FAILURE_START=1."
-	fi
-    else
-        if [ $((current_time - INITIAL_FAIL_TIME)) -ge "$TIME_LIMIT" ]; then
-                echo "$(date '+%Y-%m-%d %H:%M:%S') - Time limit exceeded while THRESHOLD > 0. Setting FAILURE_START=1."
-                echo b > /proc/sysrq-trigger
-        
         else
-            FAILURE_START=0
+            echo "$(date '+%Y-%m-%d %H:%M:%S') - THRESHOLD is 0. Setting FAILURE_START=1"
+            FAILURE_START=1
         fi
+    else
+        if [ "$INITIAL_FAIL_TIME" -ne 0 ] && [ $((current_time - INITIAL_FAIL_TIME)) -ge "$TIME_LIMIT" ]; then
+            echo "$(date '+%Y-%m-%d %H:%M:%S') - Internet down too long while THRESHOLD > 0. Rebooting..."
+            echo b > /proc/sysrq-trigger
+        fi
+        FAILURE_START=0
     fi
 
-    sleep 10
+    sleep 5
 done
-
