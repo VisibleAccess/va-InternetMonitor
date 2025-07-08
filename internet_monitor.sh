@@ -34,9 +34,11 @@ get_packet_loss() {
     loss_line=$(echo "$result" | grep -oE '[0-9]+% packet loss')
     if [ -n "$loss_line" ]; then
         loss_value=$(echo "$loss_line" | awk '{print $1}' | tr -d '%')
-        if echo "$loss_value" | grep -qE '^[0-9]+$' && [ "$loss_value" -le 100 ]; then
+	if echo "$loss_value" | grep -qE '^[0-9]+$' && [ "$loss_value" -le 100 ]; then
             PACKET_LOSS=$loss_value
         fi
+    else
+	PACKET_LOSS=100
     fi
 }
 
