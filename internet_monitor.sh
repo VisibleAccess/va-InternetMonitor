@@ -15,6 +15,7 @@ LTE_IFACE=${LTE_INTERFACE_NAME}
 THRESHOLD=$MAX_THRESHOLD_COUNT
 INITIAL_FAIL_TIME=0
 PACKET_LOSS=100 #Default global
+PING_INTERVAL=${PING_INTERVAL:-60}
 
 # Enable sysrq for reboot
 echo 1 > /proc/sys/kernel/sysrq
@@ -103,5 +104,5 @@ while true; do
 	    echo "$(date '+%Y-%m-%d %H:%M:%S') - Internet down on both Interfaces. Failure duration: ${failure_duration} seconds ($((failure_duration / 60)) min)."
     fi
 
-    sleep 5
+    sleep $PING_INTERVAL
 done
