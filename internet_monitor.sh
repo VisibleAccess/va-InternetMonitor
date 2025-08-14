@@ -16,12 +16,32 @@ THRESHOLD=$MAX_THRESHOLD_COUNT
 INITIAL_FAIL_TIME=0
 PACKET_LOSS=100 #Default global
 PING_INTERVAL=${PING_INTERVAL:-60}
+WATCHDOG_DEV="/dev/watchdog"
 
 # Enable sysrq for reboot
 echo 1 > /proc/sys/kernel/sysrq
 
 echo "$(date '+%Y-%m-%d %H:%M:%S') - Internet Monitor Started"
 echo "$(date '+%Y-%m-%d %H:%M:%S') - Interfaces: Ethernet=$ETHERNET_IFACE, LTE=$LTE_IFACE"
+
+watchdog_thread() {
+
+    if [ ! -e "$WATCHDOG_DEV" ]; then
+        echo "$(date '+%Y-%m-%d %H:%M:%S') - ERROR: Watchdog device not found"
+        return
+    fi
+
+    while true; do
+        # Simple feed every 5 seconds
+        echo > "$WATCHDOG_DEV"
+        # Debug log
+        echo "$(date '+%Y-%m-%d %H:%M:%S') - Watchdog fed"
+        sleep 5
+    done
+}
+
+# Start watchdog thread in background
+watchdog_thread &
 
 # Function to get packet loss
 get_packet_loss() {
