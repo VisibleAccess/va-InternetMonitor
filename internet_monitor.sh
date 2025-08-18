@@ -26,25 +26,20 @@ echo "$(date '+%Y-%m-%d %H:%M:%S') - Interfaces: Ethernet=$ETHERNET_IFACE, LTE=$
 
 watchdog_thread() {
 
-    if [ ! -e "$WATCHDOG_DEV" ]; then
-        echo "$(date '+%Y-%m-%d %H:%M:%S') - ERROR: Watchdog device not found"
-        return
-    fi
-
     if [ ! -w "$WATCHDOG_DEV" ]; then
-        echo "$(date '+%Y-%m-%d %H:%M:%S') - ERROR: No write permission for watchdog device $WATCHDOG_DEV"
+        echo "$(date '+%Y-%m-%d %H:%M:%S') - ERROR: Watchdog device not found or not writable"
         return
     fi
 
     while true; do
         # Simple feed every 5 seconds
-        if ! echo > "$WATCHDOG_DEV" 2>/dev/null; then
-	    echo "$(date '+%Y-%m-%d %H:%M:%S') - ERROR: Failed to feed watchdog"
+	if echo > "$WATCHDOG_DEV" 2>/dev/null; then
+	    echo "$(date '+%Y-%m-%d %H:%M:%S') - Watchdog fed"
 	else
-            # Debug log
-            echo "$(date '+%Y-%m-%d %H:%M:%S') - Watchdog fed"
+	    echo "$(date '+%Y-%m-%d %H:%M:%S') - Error: Failed to feed watchdog"
+	    break
 	fi
-        sleep 5
+	sleep 5
     done
 }
 
