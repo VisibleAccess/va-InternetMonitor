@@ -31,11 +31,19 @@ watchdog_thread() {
         return
     fi
 
+    if [ ! -w "$WATCHDOG_DEV" ]; then
+        echo "$(date '+%Y-%m-%d %H:%M:%S') - ERROR: No write permission for watchdog device $WATCHDOG_DEV"
+        return
+    fi
+
     while true; do
         # Simple feed every 5 seconds
-        echo > "$WATCHDOG_DEV"
-        # Debug log
-        echo "$(date '+%Y-%m-%d %H:%M:%S') - Watchdog fed"
+        if ! echo > "$WATCHDOG_DEV" 2>/dev/null; then
+	    echo "$(date '+%Y-%m-%d %H:%M:%S') - ERROR: Failed to feed watchdog"
+	else
+            # Debug log
+            echo "$(date '+%Y-%m-%d %H:%M:%S') - Watchdog fed"
+	fi
         sleep 5
     done
 }
