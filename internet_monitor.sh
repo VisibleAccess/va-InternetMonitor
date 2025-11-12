@@ -19,7 +19,7 @@ PING_INTERVAL=${PING_INTERVAL:-60}
 WATCHDOG_DEV="/dev/watchdog"
 
 # set true/1/yes to enable watchdog
-WATCHDOG_ENABLE=${WATCHDOG_ENABLE:-false}
+WATCHDOG_ENABLE=${WATCHDOG_ENABLE:-0}
 
 # Enable sysrq for reboot
 echo 1 > /proc/sys/kernel/sysrq
@@ -46,11 +46,13 @@ watchdog_thread() {
     done
 }
 
-# Start watchdog thread in background
-case "$(printf '%s' "$WATCHDOG_ENABLE" | tr '[:upper:]' '[:lower:]')" in
-  1|true|yes|on) watchdog_thread & WATCHDOG_PID=$! ;;
-  *) echo "$(date '+%Y-%m-%d %H:%M:%S') - Watchdog disabled (set WATCHDOG_ENABLE=true to enable)";;
-esac
+# Start watchdog only when WATCHDOG_ENABLE=1
+if [ "$WATCHDOG_ENABLE" -eq 1 ]; then
+    watchdog_thread &
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - Watchdog enabled"
+else
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - Watchdog disabled (set WATCHDOG_ENABLE=1 to enable)"
+fi
 
 # Function to get packet loss
 get_packet_loss() {
