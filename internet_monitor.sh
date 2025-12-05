@@ -24,22 +24,22 @@ WATCHDOG_ENABLE=${WATCHDOG_ENABLE:-0}
 # Enable sysrq for reboot
 echo 1 > /proc/sys/kernel/sysrq
 
-echo "$(date '+%Y-%m-%d %H:%M:%S') - Internet Monitor Started"
-echo "$(date '+%Y-%m-%d %H:%M:%S') - Interfaces: Ethernet=$ETHERNET_IFACE, LTE=$LTE_IFACE"
+echo "$(date '+%Y-%m-%d %H:%M:%S') - INFO - Internet Monitor Started"
+echo "$(date '+%Y-%m-%d %H:%M:%S') - INFO - Interfaces: Ethernet=$ETHERNET_IFACE, LTE=$LTE_IFACE"
 
 watchdog_thread() {
 
     if [ ! -w "$WATCHDOG_DEV" ]; then
-        echo "$(date '+%Y-%m-%d %H:%M:%S') - ERROR: Watchdog device not found or not writable"
+        echo "$(date '+%Y-%m-%d %H:%M:%S') - ERROR - Watchdog device not found or not writable"
         return
     fi
 
     while true; do
         # Simple feed every 5 seconds
 	if echo > "$WATCHDOG_DEV" 2>/dev/null; then
-	    echo "$(date '+%Y-%m-%d %H:%M:%S') - Watchdog fed"
+	    echo "$(date '+%Y-%m-%d %H:%M:%S') - INFO - Watchdog fed"
 	else
-	    echo "$(date '+%Y-%m-%d %H:%M:%S') - Error: Failed to feed watchdog"
+	    echo "$(date '+%Y-%m-%d %H:%M:%S') - ERROR - Failed to feed watchdog"
 	    break
 	fi
 	sleep 5
@@ -49,9 +49,9 @@ watchdog_thread() {
 # Start watchdog only when WATCHDOG_ENABLE=1
 if [ "$WATCHDOG_ENABLE" -eq 1 ]; then
     watchdog_thread &
-    echo "$(date '+%Y-%m-%d %H:%M:%S') - Watchdog enabled"
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - INFO - Watchdog enabled"
 else
-    echo "$(date '+%Y-%m-%d %H:%M:%S') - Watchdog disabled (set WATCHDOG_ENABLE=1 to enable)"
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - INFO - Watchdog disabled (set WATCHDOG_ENABLE=1 to enable)"
 fi
 
 # Function to get packet loss
@@ -85,7 +85,7 @@ while true; do
         get_packet_loss "$iface"
         loss=$PACKET_LOSS
 
-        echo "$(date '+%Y-%m-%d %H:%M:%S') - $iface Loss: ${loss}%"
+        echo "$(date '+%Y-%m-%d %H:%M:%S') - INFO - $iface Loss: ${loss}%"
 
         if [ "$loss" = "100" ]; then
             # Failed ping
@@ -119,22 +119,22 @@ while true; do
         THRESHOLD=$MAX_THRESHOLD_COUNT
     fi
 
-    echo "$(date '+%Y-%m-%d %H:%M:%S') - THRESHOLD=$THRESHOLD"
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - INFO - THRESHOLD=$THRESHOLD"
     
     current_time=$(date +%s)
 
     if [ "$THRESHOLD" -le 0 ]; then
-	echo "$(date '+%Y-%m-%d %H:%M:%S') - THRESHOLD is 0. Rebooting now..."
+	echo "$(date '+%Y-%m-%d %H:%M:%S') - ALERT - THRESHOLD is 0. Rebooting now..."
 	sync
 	echo b > /proc/sysrq-trigger
     elif [ "$INITIAL_FAIL_TIME" -ne 0 ] && [ $((current_time - INITIAL_FAIL_TIME)) -ge "$TIME_LIMIT" ]; then
-            echo "$(date '+%Y-%m-%d %H:%M:%S') - Internet down too long while THRESHOLD > 0. Rebooting..."
+            echo "$(date '+%Y-%m-%d %H:%M:%S') - ALERT - Internet down too long while THRESHOLD > 0. Rebooting..."
             sync
             echo b > /proc/sysrq-trigger
     
     elif [ "$INITIAL_FAIL_TIME" -ne 0 ]; then
 	    failure_duration=$((current_time - INITIAL_FAIL_TIME))
-	    echo "$(date '+%Y-%m-%d %H:%M:%S') - Internet down on both Interfaces. Failure duration: ${failure_duration} seconds ($((failure_duration / 60)) min)."
+	    echo "$(date '+%Y-%m-%d %H:%M:%S') - WARNING - Internet down on both Interfaces. Failure duration: ${failure_duration} seconds ($((failure_duration / 60)) min)."
     fi
 
     sleep $PING_INTERVAL
