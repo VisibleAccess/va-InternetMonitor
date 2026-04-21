@@ -10,6 +10,11 @@ TIME_LIMIT=$((THRESHOLD_TIME * 60))
 # Read interface names from environment variables
 ETHERNET_IFACE=${ETHERNET_INTERFACE_NAME}
 LTE_IFACE=${LTE_INTERFACE_NAME}
+WWAN_CONTROL_DEVICE=${WAN_CONTROL_DEVICE:-cdc-wdm0}
+
+# Persistent reboot state shared with nm-carrier-manager
+STATE_DIR=${STATE_DIR:-/var/lib/va-state}
+STATE_FILE=${STATE_FILE:-/var/lib/va-state/state.env}
 
 # Initialize
 THRESHOLD=$MAX_THRESHOLD_COUNT
@@ -21,6 +26,7 @@ WATCHDOG_DEV="/dev/watchdog"
 # set true/1/yes to enable watchdog
 WATCHDOG_ENABLE=${WATCHDOG_ENABLE:-0}
 LOG_LEVEL=$(echo "${LOG_LEVEL:-ERROR}" | tr '[:lower:]' '[:upper:]')
+
 
 # Map log levels to numeric values for easy comparison
 log_level_value() {
@@ -50,6 +56,58 @@ log() {
     fi
 
     echo "$(date '+%Y-%m-%d %H:%M:%S') - ${level} - $message"
+}
+
+get_active_nm_connection_from_device() {
+    dev="$1"
+    [ -z "$dev" ] && return 0
+
+    conn=$(nmcli -t -f GENERAL.CONNECTION device show "$dev" 2>/dev/null | head -n 1 | cut -d: -f2-)
+    if [ -n "$conn" ] && [ "$conn" != "--" ]; then
+        printf "%s" "$conn"
+    fi
+}
+
+get_active_lte_connection() {
+    conn=$(get_active_nm_connection_from_device "$LTE_IFACE")
+    if [ -n "$conn" ]; then
+        printf "%s" "$conn"
+        return 0
+    fi
+
+    conn=$(get_active_nm_connection_from_device "$WWAN_CONTROL_DEVICE")
+    if [ -n "$conn" ]; then
+        printf "%s" "$conn"
+        return 0
+    fi
+
+    printf "%s" ""
+}
+
+write_lte_reboot_state() {
+    mkdir -p "$STATE_DIR"
+
+    count=0
+    if [ -f "$STATE_FILE" ]; then
+        . "$STATE_FILE" 2>/dev/null || true
+        if [ "${CAUSE:-}" = "lte_no_internet_reboot" ]; then
+            count=${COUNT:-0}
+        fi
+    fi
+
+    count=$((count + 1))
+    saved_connection="$(get_active_lte_connection)"
+    safe_saved_connection=$(printf "%s" "$saved_connection" | sed "s/'/'\\\\''/g")
+
+    {
+        echo "CAUSE='lte_no_internet_reboot'"
+        echo "COUNT='${count}'"
+        echo "SAVED_CONNECTION='${safe_saved_connection}'"
+        echo "TIMESTAMP='$(date -u +%Y-%m-%dT%H:%M:%SZ)'"
+    } > "$STATE_FILE"
+
+    sync
+    log ALERT "Saved LTE reboot state: COUNT=${count}, SAVED_CONNECTION=${saved_connection:-none}"
 }
 
 # Enable sysrq for reboot
@@ -142,10 +200,10 @@ while true; do
         # At least one is up → increase threshold
         THRESHOLD=$((THRESHOLD + SUCCESS_INCREMENT_FACTOR))
         INITIAL_FAIL_TIME=0
+
     fi
 
     # Clamp THRESHOLD between 0 and MAX
-
     if [ "$THRESHOLD" -gt "$MAX_THRESHOLD_COUNT" ]; then
         THRESHOLD=$MAX_THRESHOLD_COUNT
     fi
@@ -156,10 +214,12 @@ while true; do
 
     if [ "$THRESHOLD" -le 0 ]; then
 	log ALERT "THRESHOLD is 0. Rebooting now..."
+	write_lte_reboot_state
 	sync
 	echo b > /proc/sysrq-trigger
     elif [ "$INITIAL_FAIL_TIME" -ne 0 ] && [ $((current_time - INITIAL_FAIL_TIME)) -ge "$TIME_LIMIT" ]; then
             log ALERT "Internet down too long while THRESHOLD > 0. Rebooting..."
+	    write_lte_reboot_state
             sync
             echo b > /proc/sysrq-trigger
     
