@@ -27,7 +27,6 @@ WATCHDOG_DEV="/dev/watchdog"
 WATCHDOG_ENABLE=${WATCHDOG_ENABLE:-0}
 LOG_LEVEL=$(echo "${LOG_LEVEL:-ERROR}" | tr '[:lower:]' '[:upper:]')
 
-
 # Map log levels to numeric values for easy comparison
 log_level_value() {
     case "$1" in
@@ -62,30 +61,17 @@ get_active_nm_connection_from_device() {
     dev="$1"
     [ -z "$dev" ] && return 0
 
-    conn=$(nmcli -t -f GENERAL.CONNECTION device show "$dev" 2>/dev/null | head -n 1 | cut -d: -f2-)
+    conn=$(nmcli -t -f GENERAL.CONNECTION device show "$dev" 2>/dev/null | cut -d: -f2)
     if [ -n "$conn" ] && [ "$conn" != "--" ]; then
         printf "%s" "$conn"
     fi
 }
 
-get_active_lte_connection() {
-    conn=$(get_active_nm_connection_from_device "$LTE_IFACE")
-    if [ -n "$conn" ]; then
-        printf "%s" "$conn"
-        return 0
-    fi
-
-    conn=$(get_active_nm_connection_from_device "$WWAN_CONTROL_DEVICE")
-    if [ -n "$conn" ]; then
-        printf "%s" "$conn"
-        return 0
-    fi
-
-    printf "%s" ""
-}
-
 write_lte_reboot_state() {
-    mkdir -p "$STATE_DIR"
+    if [ ! -d "$STATE_DIR" ]; then
+        log ERROR "State directory does not exist: $STATE_DIR"
+        return 1
+    fi
 
     count=0
     if [ -f "$STATE_FILE" ]; then
@@ -96,7 +82,7 @@ write_lte_reboot_state() {
     fi
 
     count=$((count + 1))
-    saved_connection="$(get_active_lte_connection)"
+    saved_connection="$(get_active_nm_connection_from_device "$WWAN_CONTROL_DEVICE")"
     safe_saved_connection=$(printf "%s" "$saved_connection" | sed "s/'/'\\\\''/g")
 
     {
@@ -106,8 +92,8 @@ write_lte_reboot_state() {
         echo "TIMESTAMP='$(date -u +%Y-%m-%dT%H:%M:%SZ)'"
     } > "$STATE_FILE"
 
-    sync
     log ALERT "Saved LTE reboot state: COUNT=${count}, SAVED_CONNECTION=${saved_connection:-none}"
+    sync
 }
 
 # Enable sysrq for reboot
