@@ -59,10 +59,9 @@ log() {
 
 get_active_nm_connection_from_device() {
     dev="$1"
-    [ -z "$dev" ] && return 0
 
     conn=$(nmcli -t -f GENERAL.CONNECTION device show "$dev" 2>/dev/null | cut -d: -f2)
-    if [ -n "$conn" ] && [ "$conn" != "--" ]; then
+    if [ -n "$conn" ]; then
         printf "%s" "$conn"
     fi
 }
@@ -187,6 +186,7 @@ while true; do
     fi
 
     # Clamp THRESHOLD between 0 and MAX
+
     if [ "$THRESHOLD" -gt "$MAX_THRESHOLD_COUNT" ]; then
         THRESHOLD=$MAX_THRESHOLD_COUNT
     fi
