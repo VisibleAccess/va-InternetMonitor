@@ -75,7 +75,7 @@ write_lte_reboot_state() {
 
     count=0
     if [ -f "$STATE_FILE" ]; then
-        . "$STATE_FILE" 2>/dev/null || true
+        . "$STATE_FILE" 2>/dev/null
         if [ "${CAUSE:-}" = "lte_no_internet_reboot" ]; then
             count=${COUNT:-0}
         fi
@@ -83,17 +83,15 @@ write_lte_reboot_state() {
 
     count=$((count + 1))
     saved_connection="$(get_active_nm_connection_from_device "$WWAN_CONTROL_DEVICE")"
-    safe_saved_connection=$(printf "%s" "$saved_connection" | sed "s/'/'\\\\''/g")
 
     {
         echo "CAUSE='lte_no_internet_reboot'"
         echo "COUNT='${count}'"
-        echo "SAVED_CONNECTION='${safe_saved_connection}'"
+        echo "SAVED_CONNECTION='${saved_connection}'"
         echo "TIMESTAMP='$(date -u +%Y-%m-%dT%H:%M:%SZ)'"
     } > "$STATE_FILE"
 
     log ALERT "Saved LTE reboot state: COUNT=${count}, SAVED_CONNECTION=${saved_connection:-none}"
-    sync
 }
 
 # Enable sysrq for reboot
@@ -186,7 +184,6 @@ while true; do
         # At least one is up → increase threshold
         THRESHOLD=$((THRESHOLD + SUCCESS_INCREMENT_FACTOR))
         INITIAL_FAIL_TIME=0
-
     fi
 
     # Clamp THRESHOLD between 0 and MAX

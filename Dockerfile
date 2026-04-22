@@ -3,6 +3,7 @@ FROM livekit/gstreamer:1.24.5-prod-rs
 RUN apt-get update && apt-get install -y \
     iproute2 \
     iputils-ping \
+    network-manager \
     && rm -rf /var/lib/apt/lists/*
 
 
