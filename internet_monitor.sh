@@ -11,10 +11,12 @@ TIME_LIMIT=$((THRESHOLD_TIME * 60))
 ETHERNET_IFACE=${ETHERNET_INTERFACE_NAME}
 LTE_IFACE=${LTE_INTERFACE_NAME}
 WWAN_CONTROL_DEVICE=${WAN_CONTROL_DEVICE:-cdc-wdm0}
+CARRIER_BACKEND=${CARRIER_BACKEND:-nm}
 
 # Persistent reboot state shared with nm-carrier-manager
 STATE_DIR=${STATE_DIR:-/var/lib/va-state}
-STATE_FILE=${STATE_FILE:-/var/lib/va-state/state.env}
+STATE_FILE=${STATE_FILE:-${STATE_DIR}/state.env}
+ACTIVE_STATE_FILE=${ACTIVE_STATE_FILE:-${STATE_DIR}/active_connection.env}
 
 # Initialize
 THRESHOLD=$MAX_THRESHOLD_COUNT
@@ -66,31 +68,69 @@ get_active_nm_connection_from_device() {
     fi
 }
 
+read_state_value() {
+    key="$1"
+    file="$2"
+
+    [ -f "$file" ] || return
+
+    grep -m1 "^${key}=" "$file" 2>/dev/null \
+        | cut -d= -f2- \
+        | sed -e "s/^'//" -e "s/'$//" -e 's/^"//' -e 's/"$//'
+}
+
+get_active_lte_network() {
+    backend=$(echo "${CARRIER_BACKEND:-nm}" | tr '[:upper:]' '[:lower:]')
+
+    case "$backend" in
+        qlril)
+            read_state_value ACTIVE_NETWORK "$ACTIVE_STATE_FILE"
+            ;;
+        nm)
+            get_active_nm_connection_from_device "$WWAN_CONTROL_DEVICE"
+            ;;
+        *)
+            # This function is called via command substitution, so send the log
+            # to stderr instead of including it in the returned network value.
+            log ERROR "Unsupported carrier backend: $backend" >&2
+            return 1
+            ;;
+    esac
+}
+
 write_lte_reboot_state() {
-    if [ ! -d "$STATE_DIR" ]; then
-        log ERROR "State directory does not exist: $STATE_DIR"
-        return 1
+    if ! mkdir -p "$STATE_DIR"; then
+        log ERROR "Failed to create state directory: $STATE_DIR"
     fi
 
     count=0
     if [ -f "$STATE_FILE" ]; then
-        . "$STATE_FILE" 2>/dev/null
-        if [ "${CAUSE:-}" = "lte_no_internet_reboot" ]; then
-            count=${COUNT:-0}
+        cause=$(read_state_value CAUSE "$STATE_FILE")
+        if [ "$cause" = "lte_no_internet_reboot" ]; then
+            count=$(read_state_value COUNT "$STATE_FILE")
+            if ! echo "${count:-0}" | grep -qE '^[0-9]+$'; then
+                count=0
+            fi
         fi
     fi
 
     count=$((count + 1))
-    saved_connection="$(get_active_nm_connection_from_device "$WWAN_CONTROL_DEVICE")"
+    backend=$(echo "${CARRIER_BACKEND:-nm}" | tr '[:upper:]' '[:lower:]')
+    saved_connection="$(get_active_lte_network)"
+    tmp_file="${STATE_FILE}.tmp.$$"
 
-    {
+    if {
         echo "CAUSE='lte_no_internet_reboot'"
         echo "COUNT='${count}'"
+        echo "BACKEND='${backend}'"
         echo "SAVED_CONNECTION='${saved_connection}'"
         echo "TIMESTAMP='$(date -u +%Y-%m-%dT%H:%M:%SZ)'"
-    } > "$STATE_FILE"
-
-    log ALERT "Saved LTE reboot state: COUNT=${count}, SAVED_CONNECTION=${saved_connection:-none}"
+    } > "$tmp_file" && mv "$tmp_file" "$STATE_FILE"; then
+        log ALERT "Saved LTE reboot state: COUNT=${count}, BACKEND=${backend}, SAVED_CONNECTION=${saved_connection:-none}"
+    else
+        log ERROR "Failed to save LTE reboot state: $STATE_FILE"
+        rm -f "$tmp_file"
+    fi
 }
 
 # Enable sysrq for reboot

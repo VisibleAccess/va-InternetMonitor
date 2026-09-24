@@ -1,5 +1,8 @@
 FROM livekit/gstreamer:1.24.5-prod-rs
 
+ENV CARRIER_BACKEND=nm
+ENV STATE_DIR=/var/lib/va-state
+
 RUN apt-get update && apt-get install -y \
     iproute2 \
     iputils-ping \
